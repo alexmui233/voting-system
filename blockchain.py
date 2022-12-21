@@ -246,40 +246,39 @@ database = ["hello", "bye", "ggg", "reg", "hsfdhdfg", "right", "alex"]
 b_chain = Blockchain()
 # b_chain.chain.append(saveblock)
 
-a, l, data = ""
-username, password  = ""
+a, l, data = "", "", ""
+username, password  = "", ""
 
-while l != "l":
-  while a != "0":
-    print("\nBlockchain Function:")
-    print("1 -- List All Block Content")
-    print("2 -- Search Specific Block Content:")
-    print("3 -- input data:")
-    print("4 -- Mining:")
-    print("5 -- voting:")
-    print("0 -- Quit:")
-    a = input("input  : ")
-    if a == "1":
-      b = None
-      searchblock(b)
-    elif a == "2":
-      b = input("input block index: ")
-      searchblock(b)
-    elif a == "3":
-      data = input("input data: ")
-    elif a == "4":
-      if data != "":
-        b_chain.mine(
-        block=Block(countblock,
-                    data=[data],
-                    prev_hash=lastblock["hash"],
-                    nonce=0))
-        print(b_chain.chain.__dict__)
-        coll_blockcontent.insert_one(b_chain.chain.getResult())
-      else:
-        print("\nNo data for mining. Please input data.\n")
-    elif  a == "5":
-      voting()
+while a != "0":
+  print("\nBlockchain Function:")
+  print("1 -- List All Block Content")
+  print("2 -- Search Specific Block Content:")
+  print("3 -- input data:")
+  print("4 -- Mining:")
+  print("5 -- voting:")
+  print("0 -- Quit:")
+  a = input("input  : ")
+  if a == "1":
+    b = None
+    searchblock(b)
+  elif a == "2":
+    b = input("input block index: ")
+    searchblock(b)
+  elif a == "3":
+    data = input("input data: ")
+  elif a == "4":
+    if data != "":
+      b_chain.mine(
+      block=Block(countblock,
+                  data=[data],
+                  prev_hash=lastblock["hash"],
+                  nonce=0))
+      print(b_chain.chain.__dict__)
+      coll_blockcontent.insert_one(b_chain.chain.getResult())
+    else:
+      print("\nNo data for mining. Please input data.\n")
+  elif  a == "5":
+    voting()
 
 #for data in database:
   #countblock += 1
