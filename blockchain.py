@@ -5,12 +5,15 @@ import pymongo
 import random
 import math
 from datetime import datetime
+from functools import reduce
+import os, random, Crypto.PublicKey.RSA
 
 client = pymongo.MongoClient("mongodb://localhost:27017/")
 db = client["blockchain"]
 coll_blockcontent = db["blockcontent"]
 coll_users = db["users"]
-
+coll_events = db["events"]
+coll_records = db["records"]
 
 def toBinary(a):
   return str(bin(int('1' + a, 16))[3:])
@@ -20,7 +23,7 @@ class Block:
   countblock = coll_blockcontent.estimated_document_count()
   lastblock = coll_blockcontent.find_one({"index": int(countblock) - 1})
 
-  def __init__(self, index=0, timestamp=0, data=None, hash="0", prev_hash="0", difficuity=0, nonce=0):
+  def __init__(self, index=0, timestamp=0, data=[], hash="0", prev_hash="0", difficuity=0, nonce=0):
       self.index = index
       self.timestamp = timestamp
       self.data = data
@@ -31,25 +34,8 @@ class Block:
 
   def cal_hash(self):
       block_string = json.dumps(self.__dict__, sort_keys=True)
-      #print("block_string", block_string)
       returnResult = hashlib.sha256(block_string.encode('utf-8')).hexdigest()
       return returnResult
-      # return updatehash(self.index, self.timestamp, self.previous_hash, self.difficulty, self.data, self.nonce)
-  ''' def setNonce(self, inputNoce):
-    self.nonce = inputNoce
-    self.hash = self.Cal_hash()
-
-  def setNonce2(self, inputNoce):
-    self.nonce = inputNoce
-
-  def Cal_hash(self):
-    saveHash = self.hash
-    self.hash = 0
-    block_string = json.dumps(self.__dict__, sort_keys=True)
-    returnResult = hashlib.sha256(block_string.encode('utf-8')).hexdigest()
-    self.hash = returnResult
-
-    return returnResult '''
 
   def getResult(self):
       return self.__dict__
@@ -73,8 +59,8 @@ class Blockchain():
 
   BLOCK_GENERATION_INTERVAL = 10  # seconds
   DIFFICULTY_ADJUSTMENT_INTERVAL = 10  # blocks
+  
   # find dynamic difficulty
-
   def dynamic_difficulty(self):
 
     total_Time = 0
@@ -107,34 +93,26 @@ class Blockchain():
     except IndexError:
         pass
 
-    #self.difficulty = math.ceil(self.difficulty)
-    print("self.difficulty: ", self.difficulty)
+    #print("self.difficulty: ", self.difficulty)
     return self.difficulty
 
     # find the nonce of the block that satisfies the difficulty and add to chain
   def mine(self, block):
     # get the start time
     st = datetime.now().timestamp()
-    print("st:",  st)
+    #print("st:",  st)
     # attempt to get the hash of the previous block.
     # this should raise an IndexError if this is the first block.
-    countblock = coll_blockcontent.estimated_document_count()
-    lastblock = coll_blockcontent.find_one({"index": int(countblock) - 1})
-    ''' try:
-        #block.previous_hash = self.chain[-1].hash()
-        lastblock[""] = 
-    except IndexError:
-        pass '''
 
     # loop until nonce that satisifeis difficulty is found
     while True:
       # if block.cal_hash()[:self.difficulty] == "0" * self.difficulty:
       if toBinary(block.cal_hash()).startswith('0' * self.difficulty) == True:
-        print("block.cal_hash(): ", block.cal_hash())
+        #print("block.cal_hash(): ", block.cal_hash())
         savecal_hash = block.cal_hash()
         # get the end time
         et = datetime.now().timestamp()
-        print("et:",  et)
+        #print("et:",  et)
         # get the execution time
         block.timestamp = et - st
         block.difficulty = self.difficulty
@@ -168,6 +146,70 @@ class User:
     self.password = password
     self.image = image
 
+class Event:
+  def __init__(self, eid, question, answers, owner, participants, state):
+    self.eid = eid 
+    self.question = question
+    self.answers = answers
+    self.owner = owner
+    self.participants = participants
+    self.state = state
+  
+class Record:
+  def __init__(self, rid, eid, answer):
+    self.rid = rid
+    self.eid = eid
+    self.answer = answer
+    
+class ring:
+    def __init__(self, k, L=1024):
+        self.k = k
+        self.l = L
+        self.n = len(list(k))
+        self.q = 1 << (L - 1)
+
+    def sign(self, m, z):
+        self.permut(m)
+        s = [None] * self.n
+        u = random.randint(0, self.q)
+        c = v = self.E(u) 
+        for i in (list(range(z+1, self.n)) + list(range(z))):
+            s[i] = random.randint(0, self.q)
+            e = self.g(s[i], self.k[i].e, self.k[i].n)
+            v = self.E(v^e) 
+            if (i+1) % self.n == 0:
+                c = v
+        s[z] = self.g(v^u, self.k[z].d, self.k[z].n)
+        return [c] + s
+
+    def verify(self, m, X):
+        self.permut(m)
+        def f1(i):
+            return self.g(X[i+1], self.k[i].e, self.k[i].n)
+        y = list(map(f1, list(range(len(X)-1))))
+        def g1(x, i):
+            return self.E(x^y[i])
+        r = reduce(g1, list(range(self.n)), X[0])
+        return r == X[0]
+
+    def permut(self, m):
+        self.p = int(hashlib.sha256(m.encode()).hexdigest(),16)
+
+    def E(self, x): 
+        msg = '%s%s' % (x, self.p)
+        return  int(hashlib.sha256(msg.encode()).hexdigest(),16)
+
+    def g(self, x, e, n):
+        q, r = divmod(x, n)
+        if ((q + 1) * n) <= ((1 << self.l) - 1):
+            result = q * n + pow(r, e, n)
+        else:
+            result = x
+        return result
+  
+def rn(_):
+  return Crypto.PublicKey.RSA.generate(1024, os.urandom)
+
 def addfirstblockindb():
     coll_blockcontent.insert_one({
       "index": 0,
@@ -196,7 +238,6 @@ else:
     lastblock["nonce"]
   )
 
-
 def searchblock(GetNum):
   if GetNum == None:
     try:
@@ -208,20 +249,17 @@ def searchblock(GetNum):
     except:
       print("Not found")
   else:
-    try:
-      print("start search.......")
-      specificblock = coll_blockcontent.find_one({"index": int(GetNum)}, {"_id": 0})
+    print("\nstart search.......")
+    specificblock = coll_blockcontent.find_one({"index": int(GetNum)}, {"_id": 0})
+    if specificblock != None:
       print(specificblock)
-    except:
+    else:
       print("out of index")
 
+
 def registeraccount():
-  
   username = input("\ninput user name : ")
-  print(username)
   db_username = coll_users.find_one({"username": username}, {"_id": 0})
-  print(db_username)
-  
   pattern = re.compile(r'([\w]+)') #\w = [A-Za-z0-9_]
   
   if username == "":
@@ -236,7 +274,6 @@ def registeraccount():
       registeraccount()
   
   nickname = input("\ninput nickname : ")
-  
   if  nickname == "":
     print("\nPlease enter a nickname")
     registeraccount()
@@ -265,20 +302,23 @@ def registeraccount():
   elif len(password) < 5:
     print("\nPassword must have at least 5 characters")
     registeraccount()
-    
+
   countuser = coll_users.estimated_document_count()
-  #lastblock = coll_blockcontent.find_one({"index": int(countblock) - 1})
   createuser = User(countuser, username, nickname, email, password, "")
   coll_users.insert_one(createuser.__dict__)
+  
+  countblock = coll_blockcontent.estimated_document_count()
+  block = Block(countblock, 0, [], "0",prev_hash=lastblock["hash"], difficuity=0, nonce=0)
+  block.data.append(str(createuser.__dict__))
+  b_chain.mine(block)
+  coll_blockcontent.insert_one(b_chain.chain[-1].getResult())
   print("\nCreate account successful")
     
 logined = False
+logined_user = User(0, "", "", "", "", "")
 def login():
-  global logined
   username = input("\ninput user name : ")
-  print(username)
   db_username = coll_users.find_one({"username": username}, {"_id": 0})
-  print(db_username)
   
   if username == "":
     print("\nPlease enter a username")
@@ -295,30 +335,276 @@ def login():
       print("\nThe password you entered was not valid")
       login()
     else:
-      print("Login successful")
-      print("logined be: ", print(logined))
+      print("\nLogin successful")
+      print("\nWelcome,", db_username["nickname"])
+      global logined
       logined = True
-      print("logined af: ", print(logined))
-    
+      global logined_user
+      logined_user = User(db_username["uid"], db_username["username"],  db_username["nickname"], db_username["email"], db_username["password"], db_username["image"])
+
+def searchevent(Geteid):
+  if Geteid == None: 
+    countevent = coll_events.estimated_document_count()
+    print("countevent: ", countevent)
+    if countevent != 0:
+      specificevent = coll_events.find({}, {"_id":0})
+      print("\n------event info in the database----")
+      for a in specificevent:
+          print("eid:", a["eid"], "| question:", a["question"], "| owner:", a["owner"], "| state:", a["state"])
+      print("------The last event info of database----\n")
+    else:
+      print("\nNot event found in database")
+  else:
+    print("\nstart search.......")
+    specificevent = coll_events.find_one({"eid": int(Geteid)}, {"_id": 0})
+    if specificevent != None:
+      print("eid:", specificevent["eid"], "| question:", specificevent["question"], "| owner:", specificevent["owner"], "| state:", specificevent["state"])
+    else:
+      print("Not found match event id")
+
+def createevent():
+  question = input("input event question: ")
+  if question == "":
+    print("\nPlease enter a question")
+    createevent()
   
+  answers = ""
+  answers_list = []
+  while answers != "done":
+    answers = input("input event answer / finish(done): ")
+    if answers == "":
+      print("\nPlease enter a answer")
+    elif answers != "done":
+      answers_list.append(answers)
+      print("---answers---")
+      for a in answers_list:
+        print(answers_list.index(a), ": ", a)
+      
+  countevent = coll_events.estimated_document_count()
+  event = Event(countevent, question, answers_list, logined_user.username, [], "registration") 
+  coll_events.insert_one(event.__dict__)
+  
+  countblock = coll_blockcontent.estimated_document_count()
+  block = Block(countblock, 0, [], "0",prev_hash=lastblock["hash"], difficuity=0, nonce=0)
+  block.data.append(str(event.__dict__))
+  b_chain.mine(block)
+  coll_blockcontent.insert_one(b_chain.chain[-1].getResult())
+  print("\nCreate event successful")
     
+def joinevent():
+  eid = input("input event id: ")
+  try:
+    specificevent = coll_events.find_one({"eid": int(eid)}, {"_id": 0})
+    if specificevent != None:
+      if specificevent["owner"] != logined_user.username:
+        if specificevent["state"] == "voting":
+          if logined_user.username in specificevent["participants"]:
+            print("\nYou have been join this event")
+          else:  
+            coll_events.update_one({"eid": int(eid)}, {"$push":{"participants":logined_user.username}})
+            countblock = coll_blockcontent.estimated_document_count()
+            block = Block(countblock, 0, [], "0",prev_hash=lastblock["hash"], difficuity=0, nonce=0)
+            block.data.append("participants: " + logined_user.username)
+            b_chain.mine(block)
+            coll_blockcontent.insert_one(b_chain.chain[-1].getResult())
+            print("\nJoin event successful")
+        else:
+          print("\nThis event is not in voting state")
+      else:
+        print("\nCannot join your own event")
+    else:
+      print("\nNot found match event id")
+  except ValueError:
+    print('\nPlease input a integer')
+    
+def eventvote():
+  joined = coll_events.find({"participants": logined_user.username}, {"_id": 0})
+  if joined != None:
+    print("\n------Joined events info in the database----")
+    for j in joined:
+      print("eid:", j["eid"], "| question:", j["question"], "| state:", j["state"])
+    print("------The last joined event info of database----")
+  voteeventid = ""
+  while voteeventid !=  "cancel":
+    voteeventid = input("\nfor vote input event id / cancel: ")
+    try:
+      voteevent = coll_events.find_one({"eid": int(voteeventid)}, {"_id": 0})
+      if voteevent != None:
+        if logined_user.username in voteevent["participants"]:
+          if voteevent["state"] == "voting":
+            print("question:", voteevent["question"], "\nanswers:")
+            for ans in voteevent["answers"]:
+              print(voteevent["answers"].index(ans), "-", ans)
+              
+            ansindex = input("input answer index: ")
+            for (index, item) in enumerate(voteevent["answers"]):
+              if index == int(ansindex):
+                countrecord = coll_records.estimated_document_count()
+                voterecord = Record(countrecord, int(voteeventid), item)
+                
+                key = list(map(rn, list(range(len(voteevent["participants"])))))
+                r = ring(key)
+                ringsign = r.sign(str(voterecord.__dict__), 0)
+                print("Signature is", ringsign)
+                print("Signature verified:",r.verify(str(voterecord.__dict__), ringsign))
+                
+                if r.verify(str(voterecord.__dict__), ringsign) == True:
+                  coll_records.insert_one(voterecord.__dict__)
+                  countblock = coll_blockcontent.estimated_document_count()
+                  block = Block(countblock, 0, [], "0",prev_hash=lastblock["hash"], difficuity=0, nonce=0)
+                  block.data.append(str(voterecord.__dict__))                
+                  b_chain.mine(block)
+                  coll_blockcontent.insert_one(b_chain.chain[-1].getResult())
+                  print("\nVote successful")
+                  break
+                else: 
+                  print(("\nSignature is not valid"))
+            else:
+              print("\nNot found match answer index")
+          else:
+            print("\nThis event is not in voting state")
+        else:
+          print("\nYou have not joined this event")
+      else:
+        print("\nNot found match event id")
+    except ValueError:
+      if voteeventid != "cancel":
+        print('\nPlease input a integer')
+  
+def mycreateevent():
+  myevent = coll_events.find({"owner": logined_user.username}, {"_id": 0})
+  if myevent != None:
+    print("\n------my events info in the database----")
+    for e in myevent:
+      print("eid:", e["eid"], "| question:", e["question"], "| participants:", len(e["participants"]), "| state:", e["state"])
+    print("------The last my event info of database----")
+    mce = ""
+    while mce !=  "0":
+      print("1 -- Change state")
+      print("2 -- View event detail")
+      print("0 -- Quit")
+      mce = input("input  : ")
+      if mce == "1":
+        eid = ""
+        while eid != "cancel":
+          eid = input("\nfor change state input event id / cancel: ")
+          try:
+            changestateevent = coll_events.find_one({"eid": int(eid), "owner": logined_user.username}, {"_id": 0})
+            if changestateevent != None:
+              if changestateevent["state"] == "registration":
+                coll_events.update_one({"eid": int(eid)}, {"$set":{"state":"voting"}})
+              elif changestateevent["state"] == "voting":
+                coll_events.update_one({"eid": int(eid)}, {"$set":{"state":"result"}})
+              
+              if changestateevent["state"] != "result":
+                changedstate = coll_events.find_one({"eid": int(eid), "owner": logined_user.username}, {"_id": 0})
+                print("\neid:", changedstate["eid"], "| state:", changedstate["state"])
+                print("\nChange event state successful")
+              else:
+                print("\nThe event state is result")
+            else:
+              print("\nNot found match event id")
+          except ValueError:
+            if eid != "cancel":
+              print('\nPlease input a integer')
+      elif mce == "2":
+        eid = ""
+        while eid != "cancel":
+          eid = input("\nfor view event detail input event id / cancel: ")
+          try:
+            specificevent = coll_events.find_one({"eid": int(eid), "owner": logined_user.username}, {"_id": 0})
+            
+            if specificevent != None:
+              if specificevent["state"] == "result":
+                totalans = coll_records.count_documents({"eid":{"$eq": int(eid)}})
+                print("question:", specificevent["question"], "\nvoters:", totalans, "\nanswers:")
+                for ans in specificevent["answers"]:
+                  anscount = coll_records.count_documents({"eid":{"$eq": int(eid)}, "answer": ans})
+                  if totalans != 0:
+                    print(ans, "--", round(anscount / totalans * 100), "%")
+                  else:
+                    print(ans, "--", "0 %")
+                ''' anspercent = coll_records.aggregate([{"$group" : {"_id":"$answer", "count":{"$sum":1}}}, {"$sort": {"count":-1}}])
+                
+                for a in anspercent:
+                  if totalans != 0:
+                    print(a["_id"], "--", round(a["count"] / totalans * 100), "%")
+                  else:
+                    for a in specificevent["answers"]:
+                      print(a, "--", "0 %") '''
+              else:
+                print("\nThe event state is not result")
+            else:
+              print("\nNot found match event id")
+          except ValueError:
+            if eid != "cancel":
+              print('\nPlease input a integer')
+  else:
+    print("Not found your events")
+  
+def viewjoinedeventresult():
+  joined = coll_events.find({"participants": logined_user.username}, {"_id": 0})
+  if joined != None:
+    print("\n------Joined events info in the database----")
+    for j in joined:
+      print("eid:", j["eid"], "| question:", j["question"], "| state:", j["state"])
+    print("------The last joined event info of database----")
+    eid = ""
+    while eid != "cancel":
+      eid = input("\nfor view event detail input event id / cancel: ")
+      try:
+        specificevent = coll_events.find_one({"eid": int(eid), "participants": logined_user.username}, {"_id": 0})
+        
+        if specificevent != None:
+          if specificevent["state"] == "result":
+            totalans = coll_records.count_documents({"eid":{"$eq": int(eid)}})
+            print("question:", specificevent["question"], "\nvoters:", totalans, "\nanswers:")
+            for ans in specificevent["answers"]:
+              anscount = coll_records.count_documents({"eid":{"$eq": int(eid)}, "answer": ans})
+              if totalans != 0:
+                print(ans, "--", round(anscount / totalans * 100), "%")
+              else:
+                print(ans, "--", "0 %")
+          else:
+            print("\nThe event state is not result")
+        else:
+          print("\nNot found match event id")
+      except ValueError:
+        if eid != "cancel":
+          print('\nPlease input a integer')
+  else:
+    print("Not found your events")
 
 def voting():
   a = ""
   while a != "0":
     print("\nVoting Function:")
-    print("1 -- List All Vote Activity")
-    print("2 -- Search Specific Block Content:")
-    print("3 -- input data:")
-    print("4 -- Mining:")
-    print("5 -- voting:")
-    print("6 -- Create Account:")
-    print("0 -- Quit:")
+    print("1 -- List all vote events")
+    print("2 -- Search specific event Content")
+    print("3 -- Create event")
+    print("4 -- Join event")
+    print("5 -- Event vote")
+    print("6 -- My created events")
+    print("7 -- View joined event result")
+    print("0 -- Quit")
     a = input("input  : ")
     if a == "1":
-      print("all vote here.")
+      b = None
+      searchevent(b)
+    elif a == "2":
+      b = input("input event id: ")
+      searchevent(b)
+    elif a == "3":
+      createevent()
+    elif a == "4":
+      joinevent()
+    elif a == "5":
+      eventvote()
+    elif a == "6":
+      mycreateevent()
+    elif a == "7":
+      viewjoinedeventresult()
     
-  
 countblock = coll_blockcontent.estimated_document_count()
 lastblock = coll_blockcontent.find_one({"index": int(countblock) - 1})
 saveblock = Block(
@@ -330,36 +616,30 @@ saveblock = Block(
   lastblock["difficulty"],
   lastblock["nonce"]
 )
-#database = ["hello", "bye", "ggg", "reg", "hsfdhdfg", "right", "alex"]
 
 b_chain = Blockchain()
 
-l, rl, data = "", "", ""
-username, password  = "", ""
-#logined = False
+l, rl, inputdata = "", "", ""
 
 while rl != "0":
-  print("\n1 -- Register Account")
-  print("2 -- Log In")
-  print("0 -- Quit:")
+  print("\n1 -- Register account")
+  print("2 -- Log in")
+  print("0 -- Quit")
   rl = input("input  : ")
   if rl == "1":
     registeraccount()
   elif rl == "2":
-    #logined = True
     login()
-    
-    print("logined: ", logined)
     
     a = ""
     while a != "0" and logined == True:
-      print("\nBlockchain Function:")
-      print("1 -- List All Block Content")
-      print("2 -- Search Specific Block Content:")
-      print("3 -- input data:")
-      print("4 -- Mining:")
-      print("5 -- voting:")
-      print("0 -- Quit:")
+      print("\nBlockchain Function")
+      print("1 -- List all block content")
+      print("2 -- Search specific block content")
+      print("3 -- Input data")
+      print("4 -- Mining")
+      print("5 -- Voting")
+      print("0 -- Quit")
       a = input("input  : ")
       if a == "1":
         b = None
@@ -372,48 +652,17 @@ while rl != "0":
       elif a == "4":
         if data != "":
           b_chain.mine(
-          block=Block(countblock,
-                      data=[data],
+          Block(countblock,
+                      data=[inputdata],
                       prev_hash=lastblock["hash"],
                       nonce=0))
-          print(b_chain.chain.__dict__)
-          coll_blockcontent.insert_one(b_chain.chain.getResult())
+          for bk in b_chain.chain:
+            print(bk.__dict__)
+            coll_blockcontent.insert_one(bk.getResult())
         else:
           print("\nNo data for mining. Please input data.\n")
       elif a == "5":
         voting()
       elif a == "0":
         logined = False
-
-#for data in database:
-  #countblock += 1
-  #countblock += 1
-  ''' b_chain.mine(
-      Block(num,
-              data=data,
-              difficulty=b_chain.dynamic_difficulty(),
-              nonce=0)) '''
-  ''' countblock = coll_blockcontent.estimated_document_count()
-  lastblock = coll_blockcontent.find_one({"index": int(countblock) - 1})
-  saveblock = Block(
-    lastblock["index"],
-    lastblock["timestamp"],
-    lastblock["data"],
-    lastblock["hash"],
-    lastblock["prev_hash"],
-    lastblock["difficulty"],
-    lastblock["nonce"]
-  ) '''
-  #print("countblock: ", countblock)
-  ''' b_chain.mine(
-    block=Block(countblock,
-                data=[data],
-                prev_hash=lastblock["hash"],
-                nonce=0))
-  countblock += 1 '''
-
-
-''' for block in b_chain.chain:
-  print(block.__dict__)
-  coll_blockcontent.insert_one(block.getResult()) '''
 
