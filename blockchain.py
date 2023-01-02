@@ -1,5 +1,6 @@
 import hashlib
 import json
+import re
 import pymongo
 import random
 import math
@@ -164,7 +165,7 @@ class User:
     self.username = username
     self.nickname = nickname
     self.email = email
-    self.pasword = password
+    self.password = password
     self.image = image
 
 def addfirstblockindb():
@@ -214,6 +215,94 @@ def searchblock(GetNum):
     except:
       print("out of index")
 
+def registeraccount():
+  
+  username = input("\ninput user name : ")
+  print(username)
+  db_username = coll_users.find_one({"username": username}, {"_id": 0})
+  print(db_username)
+  
+  pattern = re.compile(r'([\w]+)') #\w = [A-Za-z0-9_]
+  
+  if username == "":
+    print("\nPlease enter a username")
+    registeraccount()
+  elif not pattern.match(username):
+    print("\nUsername can only contain letters, numbers, and underscores")
+    registeraccount()
+  elif db_username != None:
+    if username == db_username["username"]:
+      print("\nThis username is already taken")
+      registeraccount()
+  
+  nickname = input("\ninput nickname : ")
+  
+  if  nickname == "":
+    print("\nPlease enter a nickname")
+    registeraccount()
+      
+  email = input("\ninput email : ")
+  db_email = coll_users.find_one({"email": email}, {"_id": 0})
+  pat = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+  if email == "":
+    print("\nPlease enter a email")
+    registeraccount()
+  elif  not re.match(pat, email):
+    print("\nInvalid email  format")
+    registeraccount()
+  elif db_email != None:
+    if email == db_email["email"]:
+      print("\nThis email is already taken")
+      registeraccount()
+  
+  password = input("\ninput password : ")
+  if  password == "":
+    print("\nPlease enter a password")
+    registeraccount()
+  elif not pattern.match(password):
+    print("\nPassword can only contain letters, numbers, and underscores")
+    registeraccount()
+  elif len(password) < 5:
+    print("\nPassword must have at least 5 characters")
+    registeraccount()
+    
+  countuser = coll_users.estimated_document_count()
+  #lastblock = coll_blockcontent.find_one({"index": int(countblock) - 1})
+  createuser = User(countuser, username, nickname, email, password, "")
+  coll_users.insert_one(createuser.__dict__)
+  print("\nCreate account successful")
+    
+logined = False
+def login():
+  global logined
+  username = input("\ninput user name : ")
+  print(username)
+  db_username = coll_users.find_one({"username": username}, {"_id": 0})
+  print(db_username)
+  
+  if username == "":
+    print("\nPlease enter a username")
+    login()
+  elif db_username == None:
+    print("\nNo account found with that username")
+    login()
+  else:
+    password = input("\ninput password : ")
+    if  password == "":
+      print("\nPlease enter a password")
+      login()
+    elif password != db_username["password"]:
+      print("\nThe password you entered was not valid")
+      login()
+    else:
+      print("Login successful")
+      print("logined be: ", print(logined))
+      logined = True
+      print("logined af: ", print(logined))
+    
+  
+    
+
 def voting():
   a = ""
   while a != "0":
@@ -241,44 +330,60 @@ saveblock = Block(
   lastblock["difficulty"],
   lastblock["nonce"]
 )
-database = ["hello", "bye", "ggg", "reg", "hsfdhdfg", "right", "alex"]
+#database = ["hello", "bye", "ggg", "reg", "hsfdhdfg", "right", "alex"]
 
 b_chain = Blockchain()
-# b_chain.chain.append(saveblock)
 
-a, l, data = "", "", ""
+l, rl, data = "", "", ""
 username, password  = "", ""
+#logined = False
 
-while a != "0":
-  print("\nBlockchain Function:")
-  print("1 -- List All Block Content")
-  print("2 -- Search Specific Block Content:")
-  print("3 -- input data:")
-  print("4 -- Mining:")
-  print("5 -- voting:")
+while rl != "0":
+  print("\n1 -- Register Account")
+  print("2 -- Log In")
   print("0 -- Quit:")
-  a = input("input  : ")
-  if a == "1":
-    b = None
-    searchblock(b)
-  elif a == "2":
-    b = input("input block index: ")
-    searchblock(b)
-  elif a == "3":
-    data = input("input data: ")
-  elif a == "4":
-    if data != "":
-      b_chain.mine(
-      block=Block(countblock,
-                  data=[data],
-                  prev_hash=lastblock["hash"],
-                  nonce=0))
-      print(b_chain.chain.__dict__)
-      coll_blockcontent.insert_one(b_chain.chain.getResult())
-    else:
-      print("\nNo data for mining. Please input data.\n")
-  elif  a == "5":
-    voting()
+  rl = input("input  : ")
+  if rl == "1":
+    registeraccount()
+  elif rl == "2":
+    #logined = True
+    login()
+    
+    print("logined: ", logined)
+    
+    a = ""
+    while a != "0" and logined == True:
+      print("\nBlockchain Function:")
+      print("1 -- List All Block Content")
+      print("2 -- Search Specific Block Content:")
+      print("3 -- input data:")
+      print("4 -- Mining:")
+      print("5 -- voting:")
+      print("0 -- Quit:")
+      a = input("input  : ")
+      if a == "1":
+        b = None
+        searchblock(b)
+      elif a == "2":
+        b = input("input block index: ")
+        searchblock(b)
+      elif a == "3":
+        data = input("input data: ")
+      elif a == "4":
+        if data != "":
+          b_chain.mine(
+          block=Block(countblock,
+                      data=[data],
+                      prev_hash=lastblock["hash"],
+                      nonce=0))
+          print(b_chain.chain.__dict__)
+          coll_blockcontent.insert_one(b_chain.chain.getResult())
+        else:
+          print("\nNo data for mining. Please input data.\n")
+      elif a == "5":
+        voting()
+      elif a == "0":
+        logined = False
 
 #for data in database:
   #countblock += 1
@@ -312,7 +417,3 @@ while a != "0":
   print(block.__dict__)
   coll_blockcontent.insert_one(block.getResult()) '''
 
-
-#print("blockp: " , str(saveblock.getResult()))
-
-#b_chain.mine(Block(countblock, data="data",  prev_hash=lastblock["hash"], difficulty=b_chain.dynamic_difficulty()))
