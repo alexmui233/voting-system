@@ -6,7 +6,7 @@ import random
 import math
 from datetime import datetime
 from functools import reduce
-import os, random, Crypto.PublicKey.RSA
+import os, Crypto.PublicKey.RSA
 
 client = pymongo.MongoClient("mongodb://localhost:27017/")
 db = client["blockchain"]
