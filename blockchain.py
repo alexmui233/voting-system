@@ -397,7 +397,7 @@ def joinevent():
     specificevent = coll_events.find_one({"eid": int(eid)}, {"_id": 0})
     if specificevent != None:
       if specificevent["owner"] != logined_user.username:
-        if specificevent["state"] == "voting":
+        if specificevent["state"] == "registration":
           if logined_user.username in specificevent["participants"]:
             print("\nYou have been join this event")
           else:  
@@ -409,7 +409,7 @@ def joinevent():
             coll_blockcontent.insert_one(b_chain.chain[-1].getResult())
             print("\nJoin event successful")
         else:
-          print("\nThis event is not in voting state")
+          print("\nThis event is not in registration state")
       else:
         print("\nCannot join your own event")
     else:
